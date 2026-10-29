@@ -7,8 +7,15 @@ A macOS disk scanner. It adds up how much space every folder takes, then shows t
 - **Scan** — choose **Scan Macintosh HD** (the whole startup disk), **Scan Home Folder**, or **Choose Folder…** (any folder or disk). The same options are in the toolbar's disk menu and the **File** menu (⌘1, ⌘2, ⌘O). **Rescan** (⌘R) scans the same place again.
 - **The tree** — each row is a folder with its total size (everything inside it, including subfolders), a bar and its share of the folder you're viewing. Only folders are listed, not files. Click a folder's arrow to expand it in place and see its subfolders.
 - **Look inside** — double-click a folder (or right-click › **Show Folders Inside**) to make it the folder you're viewing; its subfolders are then listed with their sizes and shares of it. The breadcrumb at the top goes back to any folder above, as does **Go › Enclosing Folder** (⌘↑) or the toolbar's up arrow.
+- **Heat map** — the right-hand pane shows the same folders as coloured tiles, each sized by how much space it uses and coloured from cool blue (smaller) to hot red (larger). It follows the tree: clicking or expanding a folder shows that folder's subfolders; with nothing selected it shows the folder you're viewing. Hover over a tile for its name, size and share; click a tile to look inside that folder, as double-clicking does in the tree. Beyond 300 subfolders, the smallest are grouped into one grey tile.
 - Right-click a folder to **Show in Finder** or **Copy Path**.
-- The footer shows how much the files directly in the current folder use (so the folder sizes plus that add up to the total), how many folders were scanned and how long it took.
+- The footer shows how much the files directly in the current folder use (so the folder sizes plus that add up to the total), how many folders were scanned and how long it took — or how old the saved scan is.
+
+## Saved scans
+
+Looking inside folders never rescans: one scan holds the whole tree. Finished scans are also saved for a while (1 hour by default; choose 15 minutes to 1 week, or off, in **Settings**, ⌘,). Scanning a folder that a saved scan covers — the same folder or one it's inside — opens it instantly, even after quitting D-Tree, and the footer says how old the scan is. **Rescan** (⌘R) always scans afresh and keeps you on the folder you're viewing. **Settings › Clear Saved Scans** deletes them.
+
+Saved scans are stored in `~/Library/Caches/com.damonmatthews.dtree/` (folder names and sizes only, no file contents); a new scan of a folder replaces older ones of it and of the folders inside it.
 
 ## How sizes are counted
 

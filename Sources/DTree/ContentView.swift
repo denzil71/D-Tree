@@ -131,36 +131,54 @@ struct BrowserView: View {
     @EnvironmentObject var model: ScanModel
     let current: DirNode
     @State private var selection: Set<DirNode> = []
+    @State private var expanded: Set<DirNode> = []
+
+    /// The heat map shows the folder selected (or last expanded) in the tree, else the one being viewed.
+    private var mapped: DirNode { selection.count == 1 ? selection.first! : current }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if current.children.isEmpty {
-                Text(current.unreadable ? "D-Tree couldn't read this folder." : "No folders inside.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(current.children, children: \.childList, selection: $selection) { node in
-                    DirRow(node: node, total: current.size)
-                }
-                .contextMenu(forSelectionType: DirNode.self) { nodes in
-                    if let node = nodes.first {
-                        Button("Show Folders Inside") { open(node) }
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)]) }
-                        Button("Copy Path") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(node.path, forType: .string)
-                        }
-                    }
-                } primaryAction: { nodes in
-                    if let node = nodes.first { open(node) }
-                }
+            HSplitView {
+                tree
+                    .frame(minWidth: 340, idealWidth: 480, maxHeight: .infinity)
+                TreemapView(node: mapped, open: open)
+                    .frame(minWidth: 280, idealWidth: 420, maxHeight: .infinity)
             }
             Divider()
             footer
         }
-        .onChange(of: current) { _ in selection = [] }
+        .onChange(of: current) { _ in
+            selection = []
+            expanded = []
+        }
+    }
+
+    @ViewBuilder private var tree: some View {
+        if current.children.isEmpty {
+            Text(current.unreadable ? "D-Tree couldn't read this folder." : "No folders inside.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(selection: $selection) {
+                TreeRows(nodes: current.children, total: current.size, expanded: $expanded) { node in
+                    selection = [node]
+                }
+            }
+            .contextMenu(forSelectionType: DirNode.self) { nodes in
+                if let node = nodes.first {
+                    Button("Show Folders Inside") { open(node) }
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)]) }
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(node.path, forType: .string)
+                    }
+                }
+            } primaryAction: { nodes in
+                if let node = nodes.first { open(node) }
+            }
+        }
     }
 
     private func open(_ node: DirNode) {
@@ -194,8 +212,13 @@ struct BrowserView: View {
                     .buttonStyle(.link)
             }
             Spacer()
-            if let result = model.result {
-                Text("\(result.directories.formatted()) folders scanned in \(model.duration.formatted(.number.precision(.fractionLength(1)))) s")
+            if let result = model.result, let date = model.scanDate {
+                if model.fromCache {
+                    Text("Saved scan from \(date.formatted(.relative(presentation: .named))) · \(result.directories.formatted()) folders")
+                        .help("Opened from the cache instead of scanning again. Rescan (⌘R) for up-to-date sizes.")
+                } else {
+                    Text("\(result.directories.formatted()) folders scanned in \(model.duration.formatted(.number.precision(.fractionLength(1)))) s")
+                }
             }
         }
         .font(.caption)
@@ -208,6 +231,44 @@ struct BrowserView: View {
         guard whole > 0 else { return "–" }
         let value = Double(part) / Double(whole)
         return value.formatted(.percent.precision(.fractionLength(value < 0.1 ? 1 : 0)))
+    }
+}
+
+/// Tree rows that can be expanded in place. Expanding one also selects it, so the heat map follows.
+struct TreeRows: View {
+    let nodes: [DirNode]
+    /// Size of the folder being viewed; bars and percentages are shares of it.
+    let total: Int64
+    @Binding var expanded: Set<DirNode>
+    let onExpand: (DirNode) -> Void
+
+    var body: some View {
+        ForEach(nodes) { node in
+            if node.children.isEmpty {
+                DirRow(node: node, total: total).tag(node)
+            } else {
+                DisclosureGroup(isExpanded: binding(for: node)) {
+                    // AnyView breaks the recursive view type.
+                    AnyView(TreeRows(nodes: node.children, total: total, expanded: $expanded, onExpand: onExpand))
+                } label: {
+                    DirRow(node: node, total: total)
+                }
+                .tag(node)
+            }
+        }
+    }
+
+    private func binding(for node: DirNode) -> Binding<Bool> {
+        Binding(
+            get: { expanded.contains(node) },
+            set: { open in
+                if open {
+                    expanded.insert(node)
+                    onExpand(node)
+                } else {
+                    expanded.remove(node)
+                }
+            })
     }
 }
 
@@ -248,6 +309,7 @@ struct DirRow: View {
             Text(node.name)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .layoutPriority(1)
             Spacer(minLength: 12)
             SizeBar(fraction: total > 0 ? Double(node.size) / Double(total) : 0)
                 .frame(width: 120, height: 8)
