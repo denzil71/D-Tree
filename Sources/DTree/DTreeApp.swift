@@ -19,7 +19,7 @@ struct DTreeApp: App {
         Window("D-Tree", id: "main") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 640, minHeight: 420)
+                .frame(minWidth: 760, minHeight: 460)
                 .onAppear {
                     // For testing: DTREE_SCAN=/some/folder scans it at launch.
                     if let path = ProcessInfo.processInfo.environment["DTREE_SCAN"], model.result == nil {
@@ -46,5 +46,41 @@ struct DTreeApp: App {
                     .disabled(!model.canGoUp)
             }
         }
+
+        Settings {
+            SettingsView().environmentObject(model)
+        }
+    }
+}
+
+struct SettingsView: View {
+    @EnvironmentObject var model: ScanModel
+    @AppStorage(Prefs.cacheMinutes) private var minutes = Prefs.defaultCacheMinutes
+    @State private var cleared = false
+
+    private static let choices = [(0, "Don't keep"), (15, "15 minutes"), (60, "1 hour"), (360, "6 hours"),
+                                  (1440, "1 day"), (10080, "1 week")]
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Keep scan results for", selection: $minutes) {
+                    ForEach(Self.choices, id: \.0) { Text($0.1).tag($0.0) }
+                }
+                HStack {
+                    Text(cleared ? "Saved scans cleared." : "Scanning a folder that a saved scan covers opens it instantly instead of scanning again. Rescan (⌘R) always scans afresh.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear Saved Scans") {
+                        model.clearCache()
+                        cleared = true
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 460)
+        .fixedSize(horizontal: false, vertical: true)
+        .onChange(of: minutes) { _ in cleared = false }
     }
 }
