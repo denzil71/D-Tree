@@ -23,16 +23,21 @@ for TRIPLE in arm64-apple-macosx13.0 x86_64-apple-macosx13.0; do
     BINS+=("$(swift build -c release --triple "$TRIPLE" --show-bin-path)/DTree")
 done
 
+# Assembled and signed outside the project: in an iCloud-synced folder (e.g. ~/Documents) the
+# File Provider keeps re-adding Finder info to the bundle, which codesign rejects.
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+SIGNED="$WORK/D-Tree.app"
+mkdir -p "$SIGNED/Contents/MacOS" "$SIGNED/Contents/Resources"
+lipo -create "${BINS[@]}" -output "$SIGNED/Contents/MacOS/DTree"
+cp Resources/Info.plist "$SIGNED/Contents/Info.plist"
+[[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$SIGNED/Contents/Resources/"
+codesign --force --sign - "$SIGNED"
+
 APP="build/D-Tree.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-lipo -create "${BINS[@]}" -output "$APP/Contents/MacOS/DTree"
-cp Resources/Info.plist "$APP/Contents/Info.plist"
-[[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
-
-# iCloud-synced folders (e.g. ~/Documents) tag the bundle with Finder info, which codesign rejects.
-xattr -cr "$APP"
-codesign --force --sign - "$APP"
+mkdir -p build
+ditto "$SIGNED" "$APP"
 echo "Built $APP"
 
 if (( DMG )); then
@@ -40,7 +45,7 @@ if (( DMG )); then
     DMG_PATH="dist/D-Tree-$VERSION.dmg"
     # Disk image with the app and an Applications shortcut to drag it onto.
     STAGE=$(mktemp -d)
-    cp -R "$APP" "$STAGE/"
+    ditto "$SIGNED" "$STAGE/D-Tree.app"
     ln -s /Applications "$STAGE/Applications"
     mkdir -p dist
     hdiutil create -volname "D-Tree $VERSION" -srcfolder "$STAGE" -format UDZO -ov "$DMG_PATH" >/dev/null
